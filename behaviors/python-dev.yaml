@@ -1,0 +1,54 @@
+# Python Development Behavior
+#
+# Provides comprehensive Python development capabilities:
+# - Code quality checking (ruff, pyright, stub detection)
+# - Automatic checking on file edits (hook)
+# - Expert Python agent
+#
+# Include this behavior to add Python development tools to any bundle.
+
+bundle:
+  name: python-dev-behavior
+  version: 0.1.0
+  description: Python development tools - quality checks, auto-checking hook, and expert agent
+
+# Tools provided by this behavior
+tools:
+  - module: tool-python-check
+    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@main#subdirectory=modules/tool-python-check
+    config:
+      # Default configuration - can be overridden in pyproject.toml
+      default_checks:
+        - format
+        - lint
+        - types
+        - stubs
+
+# Hooks provided by this behavior
+hooks:
+  - module: hooks-python-check
+    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@main#subdirectory=modules/hooks-python-check
+    config:
+      # Enable automatic checking on Python file edits
+      enabled: true
+      # File patterns to check
+      file_patterns:
+        - "*.py"
+      # Minimum severity to report: error | warning | info
+      report_level: warning
+      # Inject issues into agent context for awareness
+      auto_inject: true
+      # Which checks to run (subset for speed on every edit)
+      checks:
+        - lint
+        - types
+
+# Agents provided by this behavior
+agents:
+  include:
+    - python-dev:agents/python-dev
+
+# Context files loaded with this behavior
+context:
+  include:
+    - python-dev:context/python-dev-instructions.md
