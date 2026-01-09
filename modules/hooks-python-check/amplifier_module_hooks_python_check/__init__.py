@@ -8,6 +8,7 @@ import fnmatch
 from pathlib import Path
 from typing import Any
 
+from amplifier_core import HookResult
 from amplifier_bundle_python_dev import CheckConfig, check_files
 from amplifier_bundle_python_dev.config import load_config
 from amplifier_bundle_python_dev.models import Severity
@@ -59,7 +60,7 @@ class PythonCheckHooks:
 
         return [i for i in issues if level_order.get(i.severity.value, 0) <= min_level]
 
-    async def handle_tool_post(self, event: str, data: dict[str, Any]) -> dict[str, Any]:
+    async def handle_tool_post(self, event: str, data: dict[str, Any]) -> HookResult:
         """Handle post-tool-use events to check Python files.
 
         Triggers on: write_file, edit_file, Write, Edit, MultiEdit
@@ -69,32 +70,32 @@ class PythonCheckHooks:
             data: Event data with tool_name, tool_input, tool_result
 
         Returns:
-            HookResult dict with action and optional context injection
+            HookResult with action and optional context injection
         """
         if not self.enabled:
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Check if this is a file write/edit operation
         tool_name = data.get("tool_name", "")
         write_tools = ["write_file", "edit_file", "Write", "Edit", "MultiEdit"]
 
         if tool_name not in write_tools:
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Extract file path from tool input
         tool_input = data.get("tool_input", {})
         file_path = tool_input.get("file_path", tool_input.get("path", ""))
 
         if not file_path:
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Check if this is a Python file
         if not self._matches_patterns(file_path):
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Check if file exists (might have been deleted)
         if not Path(file_path).exists():
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Run checks
         result = check_files([file_path], config=self.check_config)
@@ -103,7 +104,7 @@ class PythonCheckHooks:
         result.issues = self._filter_by_level(result.issues)
 
         if result.clean:
-            return {"action": "continue"}
+            return HookResult(action="continue")
 
         # Build response based on configuration
         hook_output = result.to_hook_output()
@@ -112,20 +113,20 @@ class PythonCheckHooks:
             # Inject issues into agent context
             context_text = f"Python check found issues in {file_path}:\n{hook_output['issues_text']}"
 
-            return {
-                "action": "inject_context",
-                "context_injection": context_text,
-                "context_injection_role": "system",
-                "user_message": f"Found {len(result.issues)} issue(s) in {file_path}",
-                "user_message_level": "warning" if result.success else "error",
-            }
+            return HookResult(
+                action="inject_context",
+                context_injection=context_text,
+                context_injection_role="system",
+                user_message=f"Found {len(result.issues)} issue(s) in {file_path}",
+                user_message_level="warning" if result.success else "error",
+            )
         else:
             # Just report to user without context injection
-            return {
-                "action": "continue",
-                "user_message": hook_output["summary"],
-                "user_message_level": "warning" if result.success else "error",
-            }
+            return HookResult(
+                action="continue",
+                user_message=hook_output["summary"],
+                user_message_level="warning" if result.success else "error",
+            )
 
 
 async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[str, Any]:
