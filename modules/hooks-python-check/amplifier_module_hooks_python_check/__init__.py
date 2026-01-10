@@ -369,6 +369,8 @@ class PythonCheckHooks:
                 action="inject_context",
                 context_injection=context_text,
                 context_injection_role="system",
+                ephemeral=True,  # Required for orchestrator to inject
+                append_to_last_tool_result=True,  # Append to tool result, not new message
                 user_message=user_message,
                 user_message_level=user_level,
             )
