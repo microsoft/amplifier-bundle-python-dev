@@ -18,11 +18,9 @@ bundle:
   version: 0.1.0
   description: Comprehensive Python development tools with code quality, LSP, and expert agent
 
-# Thin bundle pattern - compose from foundation + lsp-python + our behavior
+# Behavior bundle pattern - provides capabilities to be composed into other bundles
+# NOTE: This bundle is included BY foundation, so it must NOT include foundation (circular dep)
 includes:
-  # Foundation provides base tools, session management, core agents
-  - bundle: git+https://github.com/microsoft/amplifier-foundation@main
-
   # LSP-Python provides Python-specific code intelligence
   - bundle: git+https://github.com/microsoft/amplifier-bundle-lsp-python@main
 
