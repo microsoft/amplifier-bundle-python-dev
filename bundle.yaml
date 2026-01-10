@@ -3,10 +3,10 @@
 # The "Python Development Home" - comprehensive Python tooling for Amplifier.
 #
 # Provides:
-# - CLI tool: uvx --from git+https://...amplifier-bundle-python-dev amplifier-python-check
 # - Tool module: python_check() for agents
 # - Hook module: Automatic checking on file write/edit
 # - Agent: python-dev expert
+# - Shared library: Core checking logic (ruff + pyright)
 # - Composition: Includes lsp-python for code intelligence
 #
 # Usage:
@@ -28,12 +28,6 @@ includes:
 
   # Our Python development behavior (tool + hook + agent)
   - bundle: python-dev:behaviors/python-dev
-
-# CLI integration for standalone use
-cli:
-  command: amplifier-python-check
-  install: uvx --from git+https://github.com/microsoft/amplifier-bundle-python-dev amplifier-python-check
-  description: Check Python code quality with ruff and pyright
 
 # Default behavior when using this bundle
 default_behavior: python-dev-behavior

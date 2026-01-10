@@ -30,7 +30,6 @@ classifiers = [
 ]
 
 dependencies = [
-    "click>=8.0",
     "ruff>=0.8.0",
     "pyright>=1.1.390",
 ]
@@ -41,9 +40,8 @@ dev = [
     "pytest-asyncio>=0.23.0",
 ]
 
-[project.scripts]
-# CLI entry point for uvx/uv tool install
-amplifier-python-check = "amplifier_bundle_python_dev.cli:cli_entry"
+# No CLI entry point - this is a library + bundle, not a standalone tool
+# Tool functionality is provided via modules/tool-python-check/
 
 [project.urls]
 Homepage = "https://github.com/microsoft/amplifier-bundle-python-dev"

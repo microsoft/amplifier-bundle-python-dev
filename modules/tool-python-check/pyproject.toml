@@ -3,14 +3,9 @@ name = "amplifier-module-tool-python-check"
 version = "0.1.0"
 description = "Python code quality check tool for Amplifier agents"
 requires-python = ">=3.11"
-dependencies = [
-    "amplifier-core",
-    "amplifier-bundle-python-dev",
-]
-
-[tool.uv.sources]
-amplifier-core = { git = "https://github.com/microsoft/amplifier-core", branch = "main" }
-amplifier-bundle-python-dev = { git = "https://github.com/microsoft/amplifier-bundle-python-dev", branch = "main" }
+# No runtime dependencies - amplifier-core and amplifier-bundle-python-dev
+# are peer dependencies provided by the host application
+dependencies = []
 
 [build-system]
 requires = ["hatchling"]

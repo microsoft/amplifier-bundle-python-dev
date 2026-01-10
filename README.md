@@ -6,24 +6,13 @@ Comprehensive Python development tools for [Amplifier](https://github.com/micros
 
 | Component | Description |
 |-----------|-------------|
-| **CLI Tool** | `amplifier-python-check` - standalone code quality checker |
 | **Tool Module** | `python_check` - agent-callable tool for quality checks |
 | **Hook Module** | Automatic checking on file write/edit events |
 | **Agent** | `python-dev` - expert Python developer agent |
 | **LSP Integration** | Includes lsp-python for code intelligence |
+| **Shared Library** | Core checking logic used by tool and hook modules |
 
 ## Quick Start
-
-### Standalone CLI
-
-```bash
-# Run directly with uvx (no install needed)
-uvx --from git+https://github.com/microsoft/amplifier-bundle-python-dev amplifier-python-check src/
-
-# Or install for repeated use
-uv tool install git+https://github.com/microsoft/amplifier-bundle-python-dev
-amplifier-python-check src/
-```
 
 ### As Amplifier Bundle
 
@@ -38,30 +27,6 @@ This gives you:
 - Python LSP (code intelligence)
 - Python quality checks (tool + hook)
 - Python development expert agent
-
-## CLI Usage
-
-```bash
-# Check a directory
-amplifier-python-check src/
-
-# Check specific files
-amplifier-python-check src/main.py tests/test_main.py
-
-# Auto-fix issues
-amplifier-python-check src/ --fix
-
-# JSON output (for CI/CD)
-amplifier-python-check src/ --format=json
-
-# GitHub Actions annotations
-amplifier-python-check src/ --format=github
-
-# Selective checks
-amplifier-python-check src/ --no-types    # Skip pyright
-amplifier-python-check src/ --no-stubs    # Skip stub detection
-amplifier-python-check src/ --only-errors # Hide warnings
-```
 
 ## Checks Performed
 
