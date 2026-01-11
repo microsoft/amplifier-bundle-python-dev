@@ -258,11 +258,11 @@ class PythonCheckHooks:
             severity_label = "error" if issue.severity == Severity.ERROR else "warn "
             # Truncate message if too long
             msg = issue.message[:60] + "..." if len(issue.message) > 63 else issue.message
-            lines.append(f"    \u2502 {severity_label}  line {issue.line:<4}  {msg}")
+            lines.append(f"   \u2502 {severity_label}  line {issue.line:<4}  {msg}")
 
         if len(result.issues) > max_issues:
             remaining = len(result.issues) - max_issues
-            lines.append(f"    \u2502 ... and {remaining} more")
+            lines.append(f"   \u2502 ... and {remaining} more")
 
         return "\n".join(lines)
 
