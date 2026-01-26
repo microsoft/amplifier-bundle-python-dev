@@ -396,6 +396,11 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
 
     Returns:
         Module metadata
+
+    Note:
+        Retrieves 'session.working_dir' capability for path resolution,
+        falling back to cwd. This handles server deployments where the
+        process cwd differs from the user's project directory.
     """
     # Get working_dir from capability (for server deployments where cwd is wrong)
     working_dir_str = coordinator.get_capability("session.working_dir")
