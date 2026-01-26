@@ -58,7 +58,7 @@ class FileCheckState:
 class PythonCheckHooks:
     """Hook handlers for automatic Python quality checking."""
 
-    def __init__(self, config: dict[str, Any] | None = None):
+    def __init__(self, config: dict[str, Any] | None = None, working_dir: Path | None = None):
         """Initialize hooks with configuration.
 
         Args:
@@ -70,9 +70,11 @@ class PythonCheckHooks:
                 - checks: list[str] (default: all) - which checks to run
                 - verbosity: str (default: "normal") - "minimal", "normal", "detailed"
                 - show_clean: bool (default: True) - show clean pass indicator
+            working_dir: Working directory for path resolution (falls back to cwd)
         """
         config = config or {}
         self.enabled = config.get("enabled", True)
+        self.working_dir = working_dir or Path.cwd()
         self.file_patterns = config.get("file_patterns", ["*.py"])
         self.report_level = config.get("report_level", "warning")
         self.auto_inject = config.get("auto_inject", True)
@@ -112,7 +114,7 @@ class PythonCheckHooks:
         """Convert absolute path to relative path for display."""
         try:
             path = Path(file_path)
-            cwd = Path.cwd()
+            cwd = self.working_dir
 
             # If file is under cwd, show relative path
             if path.is_absolute():
@@ -394,8 +396,17 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
 
     Returns:
         Module metadata
+
+    Note:
+        Retrieves 'session.working_dir' capability for path resolution,
+        falling back to cwd. This handles server deployments where the
+        process cwd differs from the user's project directory.
     """
-    hooks = PythonCheckHooks(config)
+    # Get working_dir from capability (for server deployments where cwd is wrong)
+    working_dir_str = coordinator.get_capability("session.working_dir")
+    working_dir = Path(working_dir_str) if working_dir_str else None
+
+    hooks = PythonCheckHooks(config, working_dir=working_dir)
 
     # Register the post-tool hook
     coordinator.hooks.register(
