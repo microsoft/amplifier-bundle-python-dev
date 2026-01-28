@@ -98,6 +98,29 @@ from .config import load_config
 - Group with blank lines between sections
 - Combine `from x import a, b` for related items only
 
+### 7. Respect Encapsulation Boundaries
+
+**Never access private attributes (`_name`) from outside a class.** Private attributes are implementation details that can change without notice.
+
+| Pattern | Problem | Correct Approach |
+|---------|---------|------------------|
+| `getattr(obj, "_internal", None)` | Bypasses encapsulation | Request a public API |
+| `obj._private_attr` | Depends on implementation | Use protocol/interface |
+| Chained unwrapping | Compounds fragility | Expose capability at top level |
+
+```python
+# BAD: Reaching into private internals
+bundle_resolver = getattr(resolver, "_bundle", resolver)
+activator = getattr(bundle_resolver, "_activator", None)
+
+# GOOD: Use or request a public API
+activator = resolver.get_activator()
+```
+
+**Key insight**: If you can't do something through the public interface, the fix is to extend the interface—not bypass it.
+
+**Test**: *"Would this code break if the internal implementation changed?"*
+
 ---
 
 ## The Golden Rule
