@@ -36,8 +36,54 @@ class PythonChecker:
         if not paths:
             paths = [Path.cwd()]
 
-        path_strs = [str(p) for p in paths]
+        # Filter out non-Python files to prevent running linters on wrong file types.
+        # When called on e.g. TypeScript files, ruff/pyright produce massive garbage
+        # output (228K+ chars) that can exhaust context budgets.
+        python_extensions = {".py", ".pyi"}
+        valid_paths: list[str] = []
+        skipped_files: list[str] = []
+        for p in paths:
+            path = Path(p)
+            if path.is_dir() or path.suffix in python_extensions:
+                valid_paths.append(str(path))
+            else:
+                skipped_files.append(str(path))
+
+        if not valid_paths:
+            return CheckResult(
+                issues=[
+                    Issue(
+                        file="",
+                        line=0,
+                        column=0,
+                        code="NON-PYTHON",
+                        message=(
+                            f"No Python files to check. "
+                            f"Skipped {len(skipped_files)} non-Python file(s): "
+                            f"{', '.join(skipped_files)}. "
+                            f"python_check only supports .py and .pyi files."
+                        ),
+                        severity=Severity.INFO,
+                        source="python-check",
+                    )
+                ],
+            )
+
+        path_strs = valid_paths
         results = CheckResult(files_checked=self._count_python_files(path_strs))
+
+        if skipped_files:
+            results.issues.append(
+                Issue(
+                    file="",
+                    line=0,
+                    column=0,
+                    code="NON-PYTHON",
+                    message=(f"Skipped {len(skipped_files)} non-Python file(s): {', '.join(skipped_files)}"),
+                    severity=Severity.INFO,
+                    source="python-check",
+                )
+            )
 
         if self.config.enable_ruff_format:
             format_result = self._run_ruff_format(path_strs, fix=fix)
