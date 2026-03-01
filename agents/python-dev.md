@@ -29,6 +29,7 @@ meta:
     <commentary>Complex code navigation goes to code-intel; quality review stays with python-dev.</commentary>
     </example>
 
+  model_role: [coding, general]
 tools:
   - module: tool-python-check
     source: git+https://github.com/microsoft/amplifier-bundle-python-dev@main#subdirectory=modules/tool-python-check
