@@ -24,6 +24,12 @@ tools:
         - types
         - stubs
 
+  - module: tool-skills
+    source: git+https://github.com/microsoft/amplifier-module-tool-skills@main
+    config:
+      skills:
+        - "@python-dev:skills"
+
 # Hooks provided by this behavior
 hooks:
   - module: hooks-python-check
