@@ -160,6 +160,49 @@ def test_no_lsp_python_namespace_in_agents():
             assert "lsp-python:" not in frontmatter, f"{md_file.name} frontmatter references lsp-python: namespace"
 
 
+def test_behavior_agent_includes_all_namespaced():
+    """Every agent include in every behavior YAML must use a namespaced ref (bundle:name)."""
+    for yaml_file in (ROOT / "behaviors").glob("*.yaml"):
+        behavior = yaml.safe_load(yaml_file.read_text())
+        agents_section = behavior.get("agents", {})
+        if not agents_section:
+            continue
+        for ref in agents_section.get("include", []):
+            assert ":" in ref, (
+                f"{yaml_file.name}: bare agent ref '{ref}' — must use namespaced form, e.g. 'python-dev:{ref}'"
+            )
+
+
+def test_behavior_context_includes_all_namespaced():
+    """Every context include in every behavior YAML must use a namespaced ref (bundle:path)."""
+    for yaml_file in (ROOT / "behaviors").glob("*.yaml"):
+        behavior = yaml.safe_load(yaml_file.read_text())
+        context_section = behavior.get("context", {})
+        if not context_section:
+            continue
+        for ref in context_section.get("include", []):
+            assert ":" in ref, (
+                f"{yaml_file.name}: bare context ref '{ref}' — must use namespaced form, e.g. 'python-dev:{ref}'"
+            )
+
+
+def test_agent_body_at_refs_all_namespaced():
+    """Every @-reference in an agent body (outside frontmatter) must be namespaced (bundle:path)."""
+    for md_file in (ROOT / "agents").glob("*.md"):
+        content = md_file.read_text()
+        # Split off frontmatter (between the first two --- markers)
+        parts = content.split("---", 2)
+        body = parts[2] if len(parts) >= 3 else content
+        for line in body.splitlines():
+            stripped = line.strip()
+            if stripped.startswith("@") and not stripped.startswith("@@"):
+                ref = stripped[1:]  # drop leading @
+                assert ":" in ref, (
+                    f"{md_file.name}: bare @-ref '@{ref}' in agent body — "
+                    f"must use namespaced form, e.g. '@python-dev:{ref}'"
+                )
+
+
 # --- Agent frontmatter ---
 
 
