@@ -10,7 +10,7 @@
 
 bundle:
   name: python-quality-behavior
-  version: 0.1.0
+  version: 0.2.0
   description: Python code quality tools - ruff, pyright, stub detection, and expert agent
 
 # Tools provided by this behavior
@@ -46,11 +46,7 @@ hooks:
         - format
 
 # Agents provided by this behavior
+# The python-dev-instructions.md reference is loaded via the code-intel agent body (context-sink).
 agents:
   include:
     - python-dev:python-dev
-
-# Context files loaded with this behavior
-context:
-  include:
-    - python-dev:context/python-dev-instructions.md

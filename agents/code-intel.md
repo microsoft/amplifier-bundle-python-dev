@@ -109,3 +109,7 @@ Run a simple `hover` operation on the project's main Python file (e.g., `src/__i
 - Suggest next steps for deeper exploration
 
 @foundation:context/LANGUAGE_PHILOSOPHY.md
+
+@python-dev:context/python-lsp.md
+
+@python-dev:context/python-dev-instructions.md

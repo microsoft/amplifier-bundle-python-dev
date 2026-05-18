@@ -4,7 +4,7 @@
 
 bundle:
   name: behavior-python-lsp
-  version: 0.1.0
+  version: 0.2.0
 
 # Include lsp-core behavior to get the tool-lsp module with source
 includes:
@@ -49,12 +49,8 @@ tools:
                 useLibraryCodeForTypes: true
                 diagnosticMode: workspace
 
-# Python-specific context for agents
-context:
-  include:
-    - python-dev:context/python-lsp.md
-
 # Python code intelligence agent
+# The python-lsp.md reference is loaded via the code-intel agent body (context-sink).
 agents:
   include:
     - python-dev:code-intel
