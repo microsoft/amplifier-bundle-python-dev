@@ -119,7 +119,11 @@ class PythonChecker:
         # Write to temp file and check
         import tempfile
 
-        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as f:
+        # encoding="utf-8": without it a text-mode temp file is written with the
+        # locale codepage (cp1252 on Windows), so non-ASCII source (unicode
+        # identifiers, docstrings, emoji) raises UnicodeEncodeError before the
+        # checks even run.
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False, encoding="utf-8") as f:
             f.write(content)
             temp_path = f.name
 
@@ -170,7 +174,7 @@ class PythonChecker:
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         except FileNotFoundError:
             return self._tool_not_found_result("ruff-format", "ruff")
 
@@ -212,7 +216,7 @@ class PythonChecker:
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         except FileNotFoundError:
             return self._tool_not_found_result("ruff-lint", "ruff")
 
@@ -260,7 +264,7 @@ class PythonChecker:
         cmd.extend(paths)
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True)
+            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
         except FileNotFoundError:
             return self._tool_not_found_result("pyright", "pyright")
 
