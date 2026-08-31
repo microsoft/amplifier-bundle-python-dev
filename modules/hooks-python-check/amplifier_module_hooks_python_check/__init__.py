@@ -379,10 +379,11 @@ class PythonCheckHooks:
                 context_lines.append(f"  ... and {len(result.issues) - 10} more issues")
 
             context_text = "\n".join(context_lines)
+            context_injection = f'<system-reminder source="hooks-python-check">\n{context_text}\n</system-reminder>'
 
             return HookResult(
                 action="inject_context",
-                context_injection=context_text,
+                context_injection=context_injection,
                 context_injection_role="user",
                 ephemeral=True,  # Ephemeral so it's applied on next iteration (after tool result)
                 append_to_last_tool_result=True,  # Append to the tool result message
