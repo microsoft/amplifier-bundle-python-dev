@@ -36,6 +36,8 @@ This gives you:
 | **Lint** | ruff check | Bugs, imports, style, complexity |
 | **Types** | pyright | Type errors, missing annotations |
 | **Stubs** | custom | TODOs, placeholders, incomplete code |
+| **Complexity** | ruff C901 | Functions with too many independent paths |
+| **Structure** | Python AST | Long authored files and functions |
 
 ## Configuration
 
@@ -98,6 +100,70 @@ When enabled, the hook automatically runs checks after Python file edits:
 4. Agent is aware of problems immediately
 
 This creates a tight feedback loop - issues are caught as you work, not at the end.
+
+### Complexity and size feedback
+
+Complexity and size findings are advisory warnings. They do not block edits or
+automatically split/refactor code. Treat a finding as a reason to inspect ownership,
+cohesion and tests; fewer lines or a lower score alone do not prove a better design.
+
+`complexity` adds C901 to the existing Ruff lint invocation, or runs only C901 when
+selected without lint. Ruff owns the metric, threshold (default 10) and per-file
+exceptions. Explicit rule selection follows Ruff's CLI precedence and overrides a
+global `lint.ignore = ["C901"]`; omit `complexity` from the hook/tool checks to opt
+out (or set `enable_complexity_check = false` when no explicit selection is used).
+Configure the threshold in the project's native Ruff settings:
+
+```toml
+[tool.ruff.lint.mccabe]
+max-complexity = 20  # Example project policy; the bundle does not override Ruff's default.
+
+[tool.amplifier-python-dev]
+enable_complexity_check = true
+enable_structure_check = true
+max_file_lines = 500
+max_function_lines = 100
+structure_max_bytes = 1048576
+# Optional replacement for default structure-specific exclusions.
+# Preserve these defaults when adding project exclusions:
+structure_exclude_patterns = ["vendor/**", "generated/**", "_generated/**", "*_pb2.py", "*_pb2_grpc.py", "tests/fixtures/**"]
+```
+
+Size means physical lines (including comments/blanks); function size is its AST
+source span, including nested definitions. Nested functions, methods and async
+functions are also measured independently. These defaults are review prompts, not
+universal limits. Unreadable, oversized or unparseable inputs produce an explicit
+`STRUCTURE-SKIPPED` warning, not a clean result. The byte limit bounds the added
+structure pass; it does not impose a timeout or size limit on existing external
+checkers.
+
+For a fast edit-time profile, override the existing hook's module configuration:
+
+```yaml
+config:
+  checks: [lint, complexity, structure]
+  check_options:
+    max_file_lines: 500
+    max_function_lines: 100
+  report_level: warning
+  auto_inject: true
+```
+
+The supplied behavior still retains format/type checks; their project-wide cost is
+not part of this fast profile. Run deeper type checks explicitly when appropriate.
+The hook handles single-file `write_file`, `edit_file`, `Write`, `Edit` and `MultiEdit`
+events with a `file_path` or `path`; shell writes and patch batches are not inferred.
+It resolves paths against the session working directory, ignores explicitly failed
+writes, reports at most ten issues to the model and suppresses identical repeated
+diagnostics. A changed diagnostic or score is reported even when counts are unchanged.
+
+Project settings load first, then module `check_options`; an explicit `checks` list
+(or the tool's `default_checks`) selects the enabled checks. Override that list to
+disable checks supplied by a behavior. The `python_check` tool accepts `complexity`
+and `structure` in its `checks` list and shares the same library implementation.
+Deploy matching library and module revisions: the modules use the host-provided
+Python-dev library. Merely updating this repository does not add it to bundles that
+do not include Python quality tooling.
 
 ## Architecture
 

@@ -4,14 +4,24 @@ This module provides the `python_check` tool that agents can use to
 check Python code for formatting, linting, type errors, and stubs.
 """
 
+from pathlib import Path
 from typing import Any
 
 from amplifier_core import ToolResult
-from amplifier_bundle_python_dev import CheckConfig, check_content, check_files
+
+from amplifier_bundle_python_dev import check_content
+from amplifier_bundle_python_dev import check_files
+from amplifier_bundle_python_dev.config import CHECK_FLAGS
+from amplifier_bundle_python_dev.config import find_pyproject_toml
+from amplifier_bundle_python_dev.config import load_config
 
 
 class PythonCheckTool:
     """Tool for checking Python code quality."""
+
+    def __init__(self, config: dict[str, Any] | None = None, working_dir: Path | None = None):
+        self.config = config or {}
+        self.working_dir = (working_dir or Path.cwd()).resolve()
 
     @property
     def name(self) -> str:
@@ -21,7 +31,7 @@ class PythonCheckTool:
     def description(self) -> str:
         return """Check Python code for quality issues.
 
-Runs ruff (formatting and linting), pyright (type checking), and stub detection
+Runs ruff (formatting, linting and complexity), file/function size warnings, pyright (type checking), and stub detection
 on Python files or code content.
 
 Input options:
@@ -63,7 +73,7 @@ Returns:
                 },
                 "checks": {
                     "type": "array",
-                    "items": {"type": "string", "enum": ["format", "lint", "types", "stubs"]},
+                    "items": {"type": "string", "enum": list(CHECK_FLAGS)},
                     "description": "Specific checks to run (default: all)",
                 },
             },
@@ -81,26 +91,23 @@ Returns:
         paths = input_data.get("paths")
         content = input_data.get("content")
         fix = input_data.get("fix", False)
-        checks = input_data.get("checks")
+        checks = input_data.get("checks", self.config.get("default_checks"))
 
         # Build config based on requested checks
-        config_overrides = {}
-        if checks:
-            config_overrides["enable_ruff_format"] = "format" in checks
-            config_overrides["enable_ruff_lint"] = "lint" in checks
-            config_overrides["enable_pyright"] = "types" in checks
-            config_overrides["enable_stub_check"] = "stubs" in checks
-
-        config = CheckConfig.from_dict(config_overrides) if config_overrides else None
+        config_overrides = dict(self.config.get("check_options", {}))
+        if checks is not None:
+            config_overrides.update({flag: name in checks for name, flag in CHECK_FLAGS.items()})
+        config_path = find_pyproject_toml(self.working_dir) or self.working_dir / "pyproject.toml"
+        config = load_config(config_path, overrides=config_overrides)
 
         # Run checks
-        if content:
-            result = check_content(content, config=config)
+        if content is not None:
+            result = check_content(content, filename=str(self.working_dir / "stdin.py"), config=config)
         elif paths:
-            result = check_files(paths, config=config, fix=fix)
+            result = check_files([self.working_dir / path for path in paths], config=config, fix=fix)
         else:
             # Default to current directory
-            result = check_files(["."], config=config, fix=fix)
+            result = check_files([self.working_dir], config=config, fix=fix)
 
         return ToolResult(success=result.success, output=result.to_tool_output())
 
@@ -115,7 +122,8 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
     Returns:
         Module metadata
     """
-    tool = PythonCheckTool()
+    working_dir = coordinator.get_capability("session.working_dir")
+    tool = PythonCheckTool(config, Path(working_dir) if working_dir else None)
 
     # Register the tool
     await coordinator.mount("tools", tool, name=tool.name)

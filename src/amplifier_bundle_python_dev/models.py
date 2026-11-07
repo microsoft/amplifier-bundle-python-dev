@@ -1,8 +1,8 @@
 """Data models for Python checking results."""
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
+from dataclasses import field
 from enum import Enum
-from pathlib import Path
 
 
 class Severity(Enum):
@@ -59,6 +59,15 @@ class CheckConfig:
     enable_ruff_lint: bool = True
     enable_pyright: bool = True
     enable_stub_check: bool = True
+    enable_structure_check: bool = True
+    # None follows lint selection, preserving existing format/type-only callers.
+    enable_complexity_check: bool | None = None
+    max_file_lines: int = 500
+    max_function_lines: int = 100
+    structure_max_bytes: int = 1024 * 1024
+    structure_exclude_patterns: list[str] = field(
+        default_factory=lambda: ["vendor/**", "generated/**", "_generated/**", "*_pb2.py", "*_pb2_grpc.py"]
+    )
 
     # Filtering
     exclude_patterns: list[str] = field(
@@ -96,6 +105,14 @@ class CheckConfig:
     hook_report_level: str = "warning"  # error | warning | info
     hook_auto_inject: bool = True
 
+    def __post_init__(self) -> None:
+        if self.enable_complexity_check is None:
+            self.enable_complexity_check = self.enable_ruff_lint
+        for name in ("max_file_lines", "max_function_lines", "structure_max_bytes"):
+            value = getattr(self, name)
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+
     @classmethod
     def from_dict(cls, data: dict) -> "CheckConfig":
         """Create config from dictionary."""
@@ -104,6 +121,12 @@ class CheckConfig:
             enable_ruff_lint=data.get("enable_ruff_lint", True),
             enable_pyright=data.get("enable_pyright", True),
             enable_stub_check=data.get("enable_stub_check", True),
+            enable_structure_check=data.get("enable_structure_check", True),
+            enable_complexity_check=data.get("enable_complexity_check"),
+            max_file_lines=data.get("max_file_lines", 500),
+            max_function_lines=data.get("max_function_lines", 100),
+            structure_max_bytes=data.get("structure_max_bytes", 1024 * 1024),
+            structure_exclude_patterns=data.get("structure_exclude_patterns", cls().structure_exclude_patterns),
             exclude_patterns=data.get("exclude_patterns", cls().exclude_patterns),
             include_patterns=data.get("include_patterns", cls().include_patterns),
             fail_on_warning=data.get("fail_on_warning", False),

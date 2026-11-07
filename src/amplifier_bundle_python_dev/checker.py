@@ -12,6 +12,7 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import structure
 from .config import load_config
 from .models import CheckConfig
 from .models import CheckResult
@@ -92,7 +93,7 @@ class PythonChecker:
             format_result = self._run_ruff_format(path_strs, fix=fix)
             results = results.merge(format_result)
 
-        if self.config.enable_ruff_lint:
+        if self.config.enable_ruff_lint or self.config.enable_complexity_check:
             lint_result = self._run_ruff_lint(path_strs, fix=fix)
             results = results.merge(lint_result)
 
@@ -103,6 +104,9 @@ class PythonChecker:
         if self.config.enable_stub_check:
             stub_result = self._run_stub_check(path_strs)
             results = results.merge(stub_result)
+
+        if self.config.enable_structure_check:
+            results = results.merge(structure.check_paths(path_strs, self.config))
 
         return results
 
@@ -128,11 +132,25 @@ class PythonChecker:
             temp_path = f.name
 
         try:
-            result = self.check_files([temp_path])
+            # Analyze the original virtual filename, including its exclusions.
+            from dataclasses import replace
+
+            result = PythonChecker(
+                replace(
+                    self.config,
+                    enable_structure_check=False,
+                    enable_ruff_lint=False,
+                    enable_complexity_check=False,
+                )
+            ).check_files([temp_path])
+            if self.config.enable_ruff_lint or self.config.enable_complexity_check:
+                result = result.merge(self._run_ruff_lint([], content=content, filename=filename))
             # Rewrite paths to use the original filename
             for issue in result.issues:
-                if issue.file == temp_path:
+                if issue.file in {temp_path, str(Path(filename).resolve())}:
                     issue.file = filename
+            if self.config.enable_structure_check:
+                result = result.merge(structure.check_source(content, filename, self.config))
             return result
         finally:
             Path(temp_path).unlink(missing_ok=True)
@@ -208,15 +226,35 @@ class PythonChecker:
 
         return CheckResult(issues=issues, checks_run=["ruff-format"])
 
-    def _run_ruff_lint(self, paths: list[str], fix: bool = False) -> CheckResult:
+    def _run_ruff_lint(
+        self,
+        paths: list[str],
+        fix: bool = False,
+        *,
+        content: str | None = None,
+        filename: str = "stdin.py",
+    ) -> CheckResult:
         """Run ruff lint check."""
         cmd = [sys.executable, "-m", "ruff", "check", "--output-format=json"]
-        if fix:
+        if self.config.enable_complexity_check:
+            cmd.extend(["--extend-select" if self.config.enable_ruff_lint else "--select", "C901"])
+            cmd.append("--force-exclude")
+            # A structure exclusion must not remove ordinary lint coverage.
+            patterns = list(self.config.exclude_patterns)
+            if not self.config.enable_ruff_lint:
+                patterns += self.config.structure_exclude_patterns
+            if patterns:
+                cmd.extend(["--extend-exclude", ",".join(patterns)])
+        if fix and self.config.enable_ruff_lint:
             cmd.append("--fix")
         cmd.extend(paths)
+        if content is not None:
+            cmd.extend(["--stdin-filename", filename, "-"])
 
         try:
-            result = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+            result = subprocess.run(
+                cmd, input=content, capture_output=True, text=True, encoding="utf-8", errors="replace"
+            )
         except FileNotFoundError:
             return self._tool_not_found_result("ruff-lint", "ruff")
 
@@ -229,8 +267,14 @@ class PythonChecker:
                 ruff_issues = json.loads(result.stdout)
                 for item in ruff_issues:
                     # Determine severity from code
-                    code = item.get("code", "")
-                    if code.startswith("E") or code.startswith("F"):
+                    code = item.get("code") or "invalid-syntax"
+                    if (
+                        code == "C901"
+                        and self.config.enable_complexity_check
+                        and structure.excluded(Path(item.get("filename", "")), self.config.structure_exclude_patterns)
+                    ):
+                        continue
+                    if code.startswith("E") or code.startswith("F") or code == "invalid-syntax":
                         severity = Severity.ERROR
                     else:
                         severity = Severity.WARNING
@@ -254,7 +298,29 @@ class PythonChecker:
                         )
                     )
             except json.JSONDecodeError:
-                pass
+                issues.append(
+                    Issue(
+                        file="",
+                        line=0,
+                        column=0,
+                        code="CHECK-UNAVAILABLE",
+                        message="Ruff returned unreadable diagnostics; lint/complexity analysis is unavailable.",
+                        severity=Severity.ERROR,
+                        source="ruff-lint",
+                    )
+                )
+        elif result.returncode != 0:
+            issues.append(
+                Issue(
+                    file="",
+                    line=0,
+                    column=0,
+                    code="CHECK-UNAVAILABLE",
+                    message=f"Ruff analysis unavailable: {result.stderr.strip()[:300]}",
+                    severity=Severity.ERROR,
+                    source="ruff-lint",
+                )
+            )
 
         return CheckResult(issues=issues, checks_run=["ruff-lint"])
 

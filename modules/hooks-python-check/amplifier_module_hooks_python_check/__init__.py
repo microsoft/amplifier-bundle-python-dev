@@ -12,6 +12,7 @@ Features:
 """
 
 import fnmatch
+import hashlib
 import os
 from pathlib import Path
 from typing import Any
@@ -19,8 +20,10 @@ from typing import Literal
 
 from amplifier_core import HookResult
 
-from amplifier_bundle_python_dev import CheckConfig
 from amplifier_bundle_python_dev import check_files
+from amplifier_bundle_python_dev.config import CHECK_FLAGS
+from amplifier_bundle_python_dev.config import find_pyproject_toml
+from amplifier_bundle_python_dev.config import load_config
 from amplifier_bundle_python_dev.models import CheckResult
 from amplifier_bundle_python_dev.models import Issue
 from amplifier_bundle_python_dev.models import Severity
@@ -41,6 +44,7 @@ class FileCheckState:
         self.error_count: int = 0
         self.warning_count: int = 0
         self.check_count: int = 0  # How many times we've checked this file
+        self.fingerprint: str | None = None
 
     def update(self, errors: int, warnings: int) -> tuple[int, int]:
         """Update state and return previous counts for comparison."""
@@ -74,21 +78,20 @@ class PythonCheckHooks:
         """
         config = config or {}
         self.enabled = config.get("enabled", True)
-        self.working_dir = working_dir or Path.cwd()
+        self.working_dir = (working_dir or Path.cwd()).resolve()
         self.file_patterns = config.get("file_patterns", ["*.py"])
         self.report_level = config.get("report_level", "warning")
         self.auto_inject = config.get("auto_inject", True)
-        self.checks = config.get("checks", ["format", "lint", "types", "stubs"])
+        self.checks = config.get("checks", list(CHECK_FLAGS))
         self.verbosity: Literal["minimal", "normal", "detailed"] = config.get("verbosity", "normal")
         self.show_clean = config.get("show_clean", True)
 
-        # Build check config
-        self.check_config = CheckConfig(
-            enable_ruff_format="format" in self.checks,
-            enable_ruff_lint="lint" in self.checks,
-            enable_pyright="types" in self.checks,
-            enable_stub_check="stubs" in self.checks,
-        )
+        # Keep project policy and module options; only an explicit selection overrides it.
+        overrides = dict(config.get("check_options", {}))
+        if "checks" in config:
+            overrides.update({flag: name in self.checks for name, flag in CHECK_FLAGS.items()})
+        config_path = find_pyproject_toml(self.working_dir) or self.working_dir / "pyproject.toml"
+        self.check_config = load_config(config_path, overrides=overrides)
 
         # Track file state for progress tracking (keyed by absolute path)
         self._file_states: dict[str, FileCheckState] = {}
@@ -141,6 +144,9 @@ class PythonCheckHooks:
         """Get or create file state tracker."""
         abs_path = str(Path(file_path).resolve())
         if abs_path not in self._file_states:
+            # A long-lived session needs only a bounded recent diagnostic history.
+            if len(self._file_states) >= 256:
+                self._file_states.pop(next(iter(self._file_states)))
             self._file_states[abs_path] = FileCheckState()
         return self._file_states[abs_path]
 
@@ -151,10 +157,13 @@ class PythonCheckHooks:
             "lint_errors": [],
             "style_issues": [],
             "stubs": [],
+            "structure": [],
         }
 
         for issue in issues:
-            if issue.source == "pyright":
+            if issue.source == "structure" or issue.code == "C901":
+                categories["structure"].append(issue)
+            elif issue.source == "pyright":
                 categories["type_errors"].append(issue)
             elif issue.source == "stub-check":
                 categories["stubs"].append(issue)
@@ -175,6 +184,7 @@ class PythonCheckHooks:
         lint_errors = len(categories["lint_errors"])
         style_issues = len(categories["style_issues"])
         stubs = len(categories["stubs"])
+        structure = len(categories["structure"])
 
         if type_errors:
             parts.append(f"{type_errors} type error{'s' if type_errors != 1 else ''}")
@@ -184,6 +194,8 @@ class PythonCheckHooks:
             parts.append(f"{style_issues} style issue{'s' if style_issues != 1 else ''}")
         if stubs:
             parts.append(f"{stubs} stub{'s' if stubs != 1 else ''}")
+        if structure:
+            parts.append(f"{structure} complexity/size finding{'s' if structure != 1 else ''}")
 
         return ", ".join(parts) if parts else "no issues"
 
@@ -286,7 +298,7 @@ class PythonCheckHooks:
 
         Args:
             event: Event name (e.g., "tool:post")
-            data: Event data with tool_name, tool_input, tool_result
+            data: Event data with tool_name, tool_input, result (or legacy tool_result)
 
         Returns:
             HookResult with action and optional context injection
@@ -301,6 +313,13 @@ class PythonCheckHooks:
         if tool_name not in write_tools:
             return HookResult(action="continue")
 
+        tool_result = data.get("result", data.get("tool_result"))
+        succeeded = (
+            tool_result.get("success") if isinstance(tool_result, dict) else getattr(tool_result, "success", None)
+        )
+        if succeeded is False:
+            return HookResult(action="continue")
+
         # Extract file path from tool input
         tool_input = data.get("tool_input", {})
         file_path = tool_input.get("file_path", tool_input.get("path", ""))
@@ -312,6 +331,9 @@ class PythonCheckHooks:
         if not self._matches_patterns(file_path):
             return HookResult(action="continue")
 
+        # Session paths can differ from the host process's current directory.
+        file_path = str((self.working_dir / file_path).resolve())
+
         # Check if file exists (might have been deleted)
         if not Path(file_path).exists():
             return HookResult(action="continue")
@@ -320,7 +342,10 @@ class PythonCheckHooks:
         result = check_files([file_path], config=self.check_config)
 
         # Filter by report level
+        excluded = any(i.code == "STRUCTURE-EXCLUDED" for i in result.issues)
         result.issues = self._filter_by_level(result.issues)
+        if not result.issues and (excluded or not result.checks_run):
+            return HookResult(action="continue")
 
         # Check for tool-not-found issues — surface these prominently
         # and bypass the normal formatting/redundancy-suppression path
@@ -337,6 +362,13 @@ class PythonCheckHooks:
         # Get display path and file state
         display_path = self._get_relative_path(file_path)
         file_state = self._get_file_state(file_path)
+        fingerprint = hashlib.sha256(
+            repr(
+                sorted((i.file, i.line, i.column, i.code, i.message, i.severity.value, i.source) for i in result.issues)
+            ).encode()
+        ).hexdigest()
+        unchanged = file_state.fingerprint == fingerprint
+        file_state.fingerprint = fingerprint
         prev_errors, prev_warnings = file_state.update(result.error_count, result.warning_count)
 
         # Handle clean pass
@@ -350,13 +382,8 @@ class PythonCheckHooks:
                 )
             return HookResult(action="continue")
 
-        # Check for redundant message (same count as before)
-        if (
-            file_state.check_count > 1
-            and result.error_count == prev_errors
-            and result.warning_count == prev_warnings
-            and self.verbosity != "detailed"
-        ):
+        # Same count can hide a new problem or a growing complexity score.
+        if file_state.check_count > 1 and unchanged and self.verbosity != "detailed":
             # Same as before, skip redundant message
             return HookResult(action="continue")
 
@@ -373,8 +400,15 @@ class PythonCheckHooks:
         if self.auto_inject:
             # Inject issues into agent context (always full detail for agent)
             context_lines = [f"Python check found issues in {display_path}:"]
-            for issue in result.issues[:10]:
+            # Reserve room for structural feedback even when existing lint issues are numerous.
+            structural = [i for i in result.issues if i.code == "C901" or i.source == "structure"][:3]
+            visible = structural + [i for i in result.issues if i not in structural][: 10 - len(structural)]
+            for issue in visible:
                 context_lines.append(f"- {issue.format_short()}")
+            if structural:
+                context_lines.append(
+                    "Complexity/size warnings are review prompts; preserve cohesive design rather than chasing scores."
+                )
             if len(result.issues) > 10:
                 context_lines.append(f"  ... and {len(result.issues) - 10} more issues")
 
