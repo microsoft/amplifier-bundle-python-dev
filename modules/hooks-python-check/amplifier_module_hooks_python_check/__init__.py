@@ -352,9 +352,18 @@ class PythonCheckHooks:
         tool_not_found = [i for i in result.issues if i.code == "TOOL-NOT-FOUND"]
         if tool_not_found:
             msgs = "; ".join(i.message for i in tool_not_found)
+            message = f"\u26a0 Python dev tools not installed: {msgs}"
             return HookResult(
-                action="continue",
-                user_message=f"\u26a0 Python dev tools not installed: {msgs}",
+                action="inject_context" if self.auto_inject else "continue",
+                context_injection=(
+                    f'<system-reminder source="hooks-python-check">\n{message}\n</system-reminder>'
+                    if self.auto_inject
+                    else None
+                ),
+                context_injection_role="user",
+                ephemeral=self.auto_inject,
+                append_to_last_tool_result=self.auto_inject,
+                user_message=message,
                 user_message_level="error",
                 user_message_source="python-check",
             )

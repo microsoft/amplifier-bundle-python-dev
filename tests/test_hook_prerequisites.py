@@ -1,7 +1,7 @@
 """Tests for TOOL-NOT-FOUND early-return handling in the python-check hook.
 
 Verifies that when check_files returns TOOL-NOT-FOUND issues, the hook:
-1. Returns a user_message_level="error" HookResult immediately
+1. Returns an error message and ephemeral context feedback when enabled
 2. Does NOT suppress the message on repeat calls (bypasses redundancy logic)
 3. Does NOT affect the normal path for real code issues (e.g., F401)
 """
@@ -111,6 +111,31 @@ async def test_tool_not_found_returns_error_level(mock_check_files, mock_exists)
     assert "ruff not installed" in result.user_message, (
         f"Expected tool message detail in result, got: {result.user_message!r}"
     )
+    assert result.action == "inject_context"
+    assert result.context_injection == (
+        f'<system-reminder source="hooks-python-check">\n{result.user_message}\n</system-reminder>'
+    )
+    assert result.context_injection_role == "user"
+    assert result.ephemeral is True
+    assert result.append_to_last_tool_result is True
+
+
+@pytest.mark.asyncio
+@patch("amplifier_module_hooks_python_check.Path.exists", return_value=True)
+@patch("amplifier_module_hooks_python_check.check_files")
+async def test_tool_not_found_respects_context_injection_opt_out(mock_check_files, mock_exists):
+    """Display-only configuration must not inject or block when a checker is absent."""
+    mock_check_files.return_value = _tool_not_found_result()
+    hooks = PythonCheckHooks({"auto_inject": False})
+    result = await hooks.handle_tool_post("tool:post", _write_event())
+
+    assert result.action == "continue"
+    assert result.context_injection is None
+    assert result.ephemeral is False
+    assert result.append_to_last_tool_result is False
+    assert result.user_message_level == "error"
+    assert result.user_message_source == "python-check"
+    assert "ruff not installed" in result.user_message
 
 
 @pytest.mark.asyncio
@@ -141,6 +166,8 @@ async def test_tool_not_found_bypasses_redundancy_suppression(mock_check_files, 
     assert "Python dev tools not installed" in (result2.user_message or ""), (
         f"Second call message should still contain warning; got: {result2.user_message!r}"
     )
+    assert result1.action == result2.action == "inject_context"
+    assert result1.context_injection == result2.context_injection
 
 
 @pytest.mark.asyncio
