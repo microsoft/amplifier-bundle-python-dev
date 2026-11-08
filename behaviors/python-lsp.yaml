@@ -4,7 +4,7 @@
 
 bundle:
   name: behavior-python-lsp
-  version: 0.2.0
+  version: 0.3.0
 
 # Include lsp-core behavior to get the tool-lsp module with source
 includes:

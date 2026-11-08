@@ -1,6 +1,6 @@
 [project]
 name = "amplifier-bundle-python-dev"
-version = "0.1.0"
+version = "0.3.0"
 description = "Comprehensive Python development tools for Amplifier - code quality, LSP, and expert agent"
 readme = "README.md"
 license = { text = "MIT" }
