@@ -5,6 +5,15 @@ from pathlib import Path
 
 from .models import CheckConfig
 
+CHECK_FLAGS = {
+    "format": "enable_ruff_format",
+    "lint": "enable_ruff_lint",
+    "types": "enable_pyright",
+    "stubs": "enable_stub_check",
+    "complexity": "enable_complexity_check",
+    "structure": "enable_structure_check",
+}
+
 # Try to import tomllib (Python 3.11+) or tomli (fallback)
 try:
     import tomllib
@@ -66,6 +75,8 @@ def load_config(
         "AMPLIFIER_PYTHON_ENABLE_RUFF_LINT": "enable_ruff_lint",
         "AMPLIFIER_PYTHON_ENABLE_PYRIGHT": "enable_pyright",
         "AMPLIFIER_PYTHON_ENABLE_STUB_CHECK": "enable_stub_check",
+        "AMPLIFIER_PYTHON_ENABLE_STRUCTURE_CHECK": "enable_structure_check",
+        "AMPLIFIER_PYTHON_ENABLE_COMPLEXITY_CHECK": "enable_complexity_check",
         "AMPLIFIER_PYTHON_FAIL_ON_WARNING": "fail_on_warning",
         "AMPLIFIER_PYTHON_AUTO_FIX": "auto_fix",
     }

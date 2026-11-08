@@ -24,6 +24,8 @@ tools:
         - lint
         - types
         - stubs
+        - complexity
+        - structure
 
 # Hooks provided by this behavior
 hooks:
@@ -44,6 +46,8 @@ hooks:
         - lint
         - types
         - format
+        - complexity
+        - structure
 
 # Agents provided by this behavior
 # The python-dev-instructions.md reference is loaded via the code-intel agent body (context-sink).
