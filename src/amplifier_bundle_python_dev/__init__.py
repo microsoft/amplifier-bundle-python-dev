@@ -9,7 +9,7 @@ Provides comprehensive Python development tools including:
 from .checker import PythonChecker, check_files, check_content
 from .models import CheckResult, Issue, Severity, CheckConfig
 
-__version__ = "0.1.0"
+__version__ = "0.3.0"
 
 __all__ = [
     "PythonChecker",

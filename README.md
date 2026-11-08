@@ -19,14 +19,41 @@ Comprehensive Python development tools for [Amplifier](https://github.com/micros
 ```yaml
 # In your bundle.yaml
 includes:
-  - bundle: git+https://github.com/microsoft/amplifier-bundle-python-dev@main
+  - bundle: git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.0
 ```
+
+Use the matching shared checker library in the Python environment that runs
+Amplifier. For a uv-managed host project, install it with:
+
+```bash
+uv add "amplifier-bundle-python-dev @ git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.0"
+```
+
+For another host, use its environment/package management mechanism to install
+that same library source. The tool and hook deliberately keep Amplifier Core and
+this shared library as host-provided peers: the bundle include alone does not
+install either peer. Restart the host session after updating its environment.
+
+The bundle and its two module sources use `v0.3.0`. The external LSP bundle still
+tracks its existing `main` source, so this is not a lock of all dependencies.
 
 This gives you:
 - Foundation tools and agents
 - Python LSP (code intelligence)
 - Python quality checks (tool + hook)
 - Python development expert agent
+
+### Stable releases
+
+`v0.3.0` adds configurable complexity and source-size warnings after Python edits
+and reports unavailable checkers through opted-in context feedback. These are
+advisory checks; they do not introduce an approval gate.
+
+Releases are Git tags and GitHub source releases. Maintainers update the bundle,
+behavior, package and module metadata together, pin this repository's module
+sources to the release tag, and qualify the three built packages before tagging
+the reviewed main commit. No package-registry publication is implied. Use the
+GitHub release notes for the change summary and qualification limits.
 
 ## Checks Performed
 
