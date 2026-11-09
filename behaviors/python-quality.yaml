@@ -10,13 +10,13 @@
 
 bundle:
   name: python-quality-behavior
-  version: 0.3.0
+  version: 0.3.1
   description: Python code quality tools - ruff, pyright, stub detection, and expert agent
 
 # Tools provided by this behavior
 tools:
   - module: tool-python-check
-    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.0#subdirectory=modules/tool-python-check
+    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.1#subdirectory=modules/tool-python-check
     config:
       # Default configuration - can be overridden in pyproject.toml
       default_checks:
@@ -30,7 +30,7 @@ tools:
 # Hooks provided by this behavior
 hooks:
   - module: hooks-python-check
-    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.0#subdirectory=modules/hooks-python-check
+    source: git+https://github.com/microsoft/amplifier-bundle-python-dev@v0.3.1#subdirectory=modules/hooks-python-check
     config:
       # Enable automatic checking on Python file edits
       enabled: true

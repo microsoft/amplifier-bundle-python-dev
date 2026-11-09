@@ -1,6 +1,6 @@
 [project]
 name = "amplifier-module-hooks-python-check"
-version = "0.3.0"
+version = "0.3.1"
 description = "Hook module for automatic Python code checking on file events"
 requires-python = ">=3.11"
 # No runtime dependencies - amplifier-core and amplifier-bundle-python-dev
