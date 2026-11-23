@@ -17,6 +17,7 @@ import os
 from pathlib import Path
 from typing import Any
 from typing import Literal
+from weakref import WeakKeyDictionary
 
 from amplifier_core import HookResult
 
@@ -95,6 +96,23 @@ class PythonCheckHooks:
 
         # Track file state for progress tracking (keyed by absolute path)
         self._file_states: dict[str, FileCheckState] = {}
+        # Call identities expire on cancellation even when tool:post never runs.
+        self.patch_writes: WeakKeyDictionary = WeakKeyDictionary()
+        self.coordinator: Any = None
+
+    def _active_patch(self):
+        dispatch = self.coordinator.get_capability("tools.dispatch") if self.coordinator else None
+        observe = getattr(dispatch, "current_call", None)
+        call = observe(self.coordinator) if callable(observe) else None
+        return call if call is not None and call.name == "apply_patch" else None
+
+    async def observe_patch(self, event: str, data: dict[str, Any]) -> HookResult:
+        path = data.get("written_path")
+        if self.enabled and isinstance(path, str) and Path(path).is_absolute() and self._matches_patterns(path):
+            call = self._active_patch()
+            if call is not None:
+                self.patch_writes.setdefault(call.identity, {})[path] = None
+        return HookResult(action="continue")
 
     def _matches_patterns(self, file_path: str) -> bool:
         """Check if file path matches any configured pattern."""
@@ -310,6 +328,13 @@ class PythonCheckHooks:
         tool_name = data.get("tool_name", "")
         write_tools = ["write_file", "edit_file", "Write", "Edit", "MultiEdit"]
 
+        if tool_name == "apply_patch":
+            call = self._active_patch()
+            if call is None or call.call_id != data.get("tool_call_id"):
+                return HookResult(action="continue")
+            paths = [p for p in self.patch_writes.pop(call.identity, {}) if Path(p).is_file()]
+            return self._check_paths(paths) if paths else HookResult(action="continue")
+
         if tool_name not in write_tools:
             return HookResult(action="continue")
 
@@ -346,8 +371,10 @@ class PythonCheckHooks:
         if not Path(file_path).exists():
             return HookResult(action="continue")
 
-        # Run checks
-        result = check_files([file_path], config=self.check_config)
+        return self._check_paths([file_path])
+
+    def _check_paths(self, paths: list[str]) -> HookResult:
+        result = check_files(paths, config=self.check_config)
 
         # Filter by report level
         excluded = any(i.code == "STRUCTURE-EXCLUDED" for i in result.issues)
@@ -377,8 +404,12 @@ class PythonCheckHooks:
             )
 
         # Get display path and file state
-        display_path = self._get_relative_path(file_path)
-        file_state = self._get_file_state(file_path)
+        if len(paths) == 1:
+            display_path = self._get_relative_path(paths[0])
+            file_state = self._get_file_state(paths[0])
+        else:
+            display_path = f"{len(paths)} patched Python files"
+            file_state = FileCheckState()
         fingerprint = hashlib.sha256(
             repr(
                 sorted((i.file, i.line, i.column, i.code, i.message, i.severity.value, i.source) for i in result.issues)
@@ -472,6 +503,8 @@ async def mount(coordinator: Any, config: dict[str, Any] | None = None) -> dict[
 
     hooks = PythonCheckHooks(config, working_dir=working_dir)
 
+    hooks.coordinator = coordinator
+    coordinator.hooks.register("apply-patch:applied", hooks.observe_patch, priority=15, name="python-check")
     # Register the post-tool hook
     coordinator.hooks.register(
         "tool:post",

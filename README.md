@@ -43,6 +43,12 @@ This gives you:
 - Python quality checks (tool + hook)
 - Python development expert agent
 
+For feedback on edited Python files, select `behaviors/python-edit-feedback.yaml`.
+It runs lint, complexity and structure checks and stays quiet on clean edits.
+With an orchestrator that exposes the current tool call and a patch tool that
+reports completed write destinations, an applied patch receives the same
+feedback. A later operation can fail after an earlier write succeeded.
+
 ### Stable releases
 
 `v0.3.1` checks the confirmed output path after successful edits, including
