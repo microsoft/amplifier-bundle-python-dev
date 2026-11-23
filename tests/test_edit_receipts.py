@@ -139,3 +139,56 @@ def test_non_edits_and_disabled_hooks_do_not_check(checked, tool, enabled):
         },
     )
     checker.assert_not_called()
+
+
+def test_patch_feedback_uses_only_live_call_writes(checked):
+    import gc
+    import weakref
+
+    class CallIdentity:
+        pass
+
+    hook, checker, root = checked
+    dispatch = Mock()
+    hook.coordinator = Mock()
+    hook.coordinator.get_capability.return_value = dispatch
+
+    def select(call_id):
+        call = SimpleNamespace(name="apply_patch", call_id=call_id, identity=CallIdentity())
+        dispatch.current_call.return_value = call
+        return call
+
+    def write(path):
+        target = root / path
+        target.write_text("x = 1\n")
+        asyncio.run(hook.observe_patch("apply-patch:applied", {"written_path": str(target)}))
+        return target
+
+    def finish(id_):
+        return invoke(hook, {"tool_name": "apply_patch", "tool_call_id": id_, "result": {"success": False}})
+
+    first = select("first")
+    renamed = write("destination.py")
+    write("destination.py")
+    write("deleted.py").unlink()
+    write("ignored.txt")
+    select("second")
+    other = write("other.py")
+    finish("first")  # A different call cannot consume this call's effects.
+    checker.assert_not_called()
+    finish("second")
+    dispatch.current_call.return_value = first
+    finish("first")
+    assert [call.args[0] for call in checker.call_args_list] == [[str(other)], [str(renamed)]]
+    finish("first")
+    assert checker.call_count == 2
+
+    cancelled = select("cancelled")
+    ref = weakref.ref(cancelled.identity)
+    write("cancelled.py")
+    dispatch.current_call.return_value = None
+    del cancelled
+    gc.collect()
+    assert ref() is None and not hook.patch_writes
+    finish("cancelled")
+    assert checker.call_count == 2
